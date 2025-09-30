@@ -3,13 +3,17 @@
 
 #include "hal/board.h"
 #include "tasks/blink_task.h"
+#include "tasks/display_task.h"
 
 // Application entry point: configure hardware and spawn the initial tasks.
 void setup() {
   hal::initBoard();
 
-  const UBaseType_t blinkPriority = tskIDLE_PRIORITY + 1;  // Low priority task.
+  const UBaseType_t blinkPriority = tskIDLE_PRIORITY + 1;    // Low priority task.
+  const UBaseType_t displayPriority = tskIDLE_PRIORITY + 1;  // Low priority task.
+  
   tasks::startBlinkTask(blinkPriority);
+  tasks::startDisplayTask(displayPriority);
 }
 
 void loop() {
