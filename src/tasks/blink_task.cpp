@@ -10,7 +10,7 @@ namespace {
 
 // Periodic LED toggle implemented as a dedicated task.
 void blinkTask(void* /*params*/) {
-  constexpr TickType_t kBlinkDelayTicks = pdMS_TO_TICKS(500);
+  constexpr TickType_t kBlinkDelayTicks = pdMS_TO_TICKS(250);
   bool ledOn = false;
 
   for (;;) {

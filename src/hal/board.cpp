@@ -4,7 +4,12 @@
 
 // Define LED_BUILTIN if not defined by the environment
 #ifndef LED_BUILTIN
-#define LED_BUILTIN 13  // Change 13 to your board's built-in LED pin if different
+#define LED_BUILTIN 2  // ESP32 built-in LED is typically on pin 2
+#endif
+
+// Define LED_BUILTIN if not defined by the environment
+#ifndef SW_01
+#define SW_01 GPIO_NUM_10  // Change 13 to your board's built-in LED pin if different
 #endif
 
 namespace hal {
