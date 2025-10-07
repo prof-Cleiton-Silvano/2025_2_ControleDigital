@@ -12,8 +12,9 @@ void setup() {
   const UBaseType_t blinkPriority = tskIDLE_PRIORITY + 1;    // Low priority task.
   const UBaseType_t displayPriority = tskIDLE_PRIORITY + 1;  // Low priority task.
   
-  tasks::startBlinkTask(blinkPriority);
+  // Start display first so it initializes the LCD and the message queue.
   tasks::startDisplayTask(displayPriority);
+  tasks::startBlinkTask(blinkPriority);
 }
 
 void loop() {

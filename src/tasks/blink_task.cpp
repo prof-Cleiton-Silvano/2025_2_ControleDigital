@@ -8,6 +8,7 @@
 #include <LiquidCrystal_I2C.h>
 
 #include <freertos/semphr.h>
+#include "tasks/display_task.h"
 
 namespace tasks {
 namespace {
@@ -18,51 +19,41 @@ constexpr uint8_t kLcdColumns = 16;
 constexpr uint8_t kLcdRows = 2;
 constexpr uint8_t kSdaPin = 21;
 constexpr uint8_t kSclPin = 22;
-LiquidCrystal_I2C lcd(kLcdAddress, kLcdColumns, kLcdRows);
-
-SemaphoreHandle_t xLcdMutex = nullptr;
-
 const char* palavra = "Controle Digital";
 constexpr size_t palavra_len = 16; // "Controle Digital" tem 16 caracteres
 
 void blinkTask(void* /*params*/) {
-  constexpr TickType_t kBlinkDelayTicks = pdMS_TO_TICKS(500);
+  constexpr TickType_t kBlinkDelayTicks = pdMS_TO_TICKS(1000);
   bool ledOn = false;
   size_t letra_idx = 0;
 
   // Inicializa LCD
-  Wire.begin(kSdaPin, kSclPin);
-  lcd.init();
-  lcd.backlight();
-    lcd.clear();
-    vTaskDelay(pdMS_TO_TICKS(100)); // Aguarda LCD estabilizar
-
-  // Cria o mutex se ainda não existe
-  if (xLcdMutex == nullptr) {
-    xLcdMutex = xSemaphoreCreateMutex();
-  }
+  // Apenas aguarda a display task inicializar e gerenciar o LCD
+  vTaskDelay(pdMS_TO_TICKS(500)); // Pequena espera para permitir init do display
+  
+  tasks::DisplayMessage msg;
 
   for (;;) {
+    // Blink LED
     ledOn = !ledOn;
     hal::setBuiltinLed(ledOn);
 
+    // Envia mensagem para a display task
+    msg.cmd = tasks::DisplayCmd::WriteChar;
+    msg.col = 0;
+    msg.row = 0;
+    msg.c = ledOn ? '1' : '0';
+    tasks::sendDisplayMessage(msg, 0); // não bloqueia, se fila cheia, ignora
 
-    // Protege acesso ao display com mutex
-    if (xLcdMutex != nullptr && xSemaphoreTake(xLcdMutex, portMAX_DELAY) == pdTRUE) {
-      lcd.setCursor(letra_idx, 0);
-      lcd.print(palavra[letra_idx]);
-      xSemaphoreGive(xLcdMutex);
-    }
-
-    letra_idx++;
-    if (letra_idx >= palavra_len) {
-      vTaskDelay(kBlinkDelayTicks);
-      if (xLcdMutex != nullptr && xSemaphoreTake(xLcdMutex, portMAX_DELAY) == pdTRUE) {
-        lcd.clear();
-        xSemaphoreGive(xLcdMutex);
-      }
-      letra_idx = 0;
-    }
+    // letra_idx++;
+    // if (letra_idx >= palavra_len) {
+    //   vTaskDelay(kBlinkDelayTicks);
+    //   // pede para display limpar
+    //   tasks::DisplayMessage clr{};
+    //   clr.cmd = tasks::DisplayCmd::Clear;
+    //   tasks::sendDisplayMessage(clr, 0);
+    //   letra_idx = 0;
+    // }
 
     vTaskDelay(kBlinkDelayTicks);
   }
