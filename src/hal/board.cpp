@@ -22,6 +22,11 @@ constexpr uint8_t kUserBtn2Pin = 33;
 constexpr uint8_t kUserBtn3Pin = 25;
 constexpr uint8_t kLimitBtn1Pin = 26;
 constexpr uint8_t kLimitBtn2Pin = 27;
+
+// Pinos do driver TB6600 para motor de passo
+constexpr uint8_t kStepperPulsePin = 18;      // PUL/STEP - GPIO 18
+constexpr uint8_t kStepperDirectionPin = 19;  // DIR - GPIO 19
+constexpr uint8_t kStepperEnablePin = 23;     // ENA - GPIO 23 (LOW = enabled, HIGH = disabled)
 }  // namespace
 
 void initBoard() {
@@ -36,6 +41,14 @@ void initBoard() {
   // Inicializa botões de fim de curso como pull-down
   pinMode(kLimitBtn1Pin, INPUT_PULLDOWN);
   pinMode(kLimitBtn2Pin, INPUT_PULLDOWN);
+
+  // Inicializa pinos do motor de passo (TB6600)
+  pinMode(kStepperPulsePin, OUTPUT);
+  pinMode(kStepperDirectionPin, OUTPUT);
+  pinMode(kStepperEnablePin, OUTPUT);
+  digitalWrite(kStepperPulsePin, LOW);
+  digitalWrite(kStepperDirectionPin, LOW);
+  digitalWrite(kStepperEnablePin, HIGH);  // Motor desabilitado inicialmente (HIGH = disabled)
 }
 
 void setBuiltinLed(bool enabled) {
@@ -58,5 +71,23 @@ uint8_t userBtn2Pin() { return kUserBtn2Pin; }
 uint8_t userBtn3Pin() { return kUserBtn3Pin; }
 uint8_t limitBtn1Pin() { return kLimitBtn1Pin; }
 uint8_t limitBtn2Pin() { return kLimitBtn2Pin; }
+
+// TB6600 Stepper Motor Driver Control Functions
+void setStepperPulse(bool state) {
+  digitalWrite(kStepperPulsePin, state ? HIGH : LOW);
+}
+
+void setStepperDirection(bool clockwise) {
+  digitalWrite(kStepperDirectionPin, clockwise ? HIGH : LOW);
+}
+
+void setStepperEnable(bool enabled) {
+  // TB6600: LOW = enabled, HIGH = disabled
+  digitalWrite(kStepperEnablePin, enabled ? LOW : HIGH);
+}
+
+uint8_t stepperPulsePin() { return kStepperPulsePin; }
+uint8_t stepperDirectionPin() { return kStepperDirectionPin; }
+uint8_t stepperEnablePin() { return kStepperEnablePin; }
 
 }  // namespace hal
