@@ -4,7 +4,6 @@
 
 #include "tasks/touch_task.h"
 #include "tasks/display_task.h"
-#include "tasks/stepper_task.h"
 
 namespace tasks {
 namespace {
@@ -32,42 +31,164 @@ void touchTask(void* /*params*/) {
   bool lastTouched = false;
   TickType_t lastTriggerTick = 0;
 
-  // Alternância: primeiro toque -> lento horário; próximo -> rápido anti-horário
-  bool nextSlowClockwise = true;
+  // Menu state: simple list of options. Tap -> next option, Hold -> select
+  const char* menuItems[] = {"Art", "Clock"};
+  constexpr size_t kMenuCount = sizeof(menuItems) / sizeof(menuItems[0]);
+  size_t menuIndex = 0;
 
+  // Threshold to consider a hold as "select" (ms)
+  constexpr TickType_t kSelectHoldMs = pdMS_TO_TICKS(1500);
+
+  // Helper: write a C-string to display at given row starting at col 0
+  auto writeStringToDisplay = [&](uint8_t row, const char* s) {
+    // Create a 16-char buffer padded with spaces to fully overwrite the line.
+    char line[17];
+    for (int i = 0; i < 16; ++i) line[i] = ' ';
+    line[16] = '\0';
+    // Copy up to 16 characters
+    for (int i = 0; i < 16 && s[i] != '\0'; ++i) line[i] = s[i];
+
+    // Send each character with a short timeout so we don't block too long
+    // but also avoid dropping characters when queue is momentarily full.
+    const TickType_t kCharTimeout = pdMS_TO_TICKS(20);
+    for (uint8_t c = 0; c < 16; ++c) {
+      tasks::DisplayMessage msg{};
+      msg.cmd = tasks::DisplayCmd::WriteChar;
+      msg.col = c;
+      msg.row = row;
+      msg.c = line[c];
+      // small timeout; queue length was increased to reduce drops
+      tasks::sendDisplayMessage(msg, kCharTimeout);
+    }
+  };
+
+  // Art mode: simple ASCII animation on 16x2 LCD. Runs until user touches the sensor.
+  auto runArtMode = [&]() {
+    // Wait until touch released (so we don't immediately exit if finger still on pad)
+    while (true) {
+      long v = touchRead(kTouchPin);
+      bool touchedNow = (v >= 0 && v < kTouchThreshold);
+      if (!touchedNow) break;
+      vTaskDelay(pdMS_TO_TICKS(50));
+    }
+
+      // Two-frame art (each string must be <=16 chars for 16x2 LCD)
+      const char* frames[][2] = {
+          {"*      *      ", "   *      *    "},
+          {"  *    *      ", "    *    *     "},
+      };
+    constexpr size_t kFrameCount = sizeof(frames) / sizeof(frames[0]);
+
+    size_t idx = 0;
+    for (;;) {
+      writeStringToDisplay(0, frames[idx][0]);
+      writeStringToDisplay(1, frames[idx][1]);
+
+      // brief delay and check for touch to exit
+      for (int t = 0; t < 4; ++t) {
+        long v = touchRead(kTouchPin);
+        bool touchedNow = (v >= 0 && v < kTouchThreshold);
+        if (touchedNow) {
+          // exit art mode
+          writeStringToDisplay(0, "Exiting Art...");
+          vTaskDelay(pdMS_TO_TICKS(1000));
+          return;
+        }
+        vTaskDelay(pdMS_TO_TICKS(50));
+      }
+
+      idx = (idx + 1) % kFrameCount;
+    }
+  };
+
+  // Clock mode: show running HH:MM:SS based on millis() until user touches to exit
+  auto runClockMode = [&]() {
+    // Wait until touch released first
+    while (true) {
+      long v = touchRead(kTouchPin);
+      bool touchedNow = (v >= 0 && v < kTouchThreshold);
+      if (!touchedNow) break;
+      vTaskDelay(pdMS_TO_TICKS(50));
+    }
+
+    unsigned long startMs = millis();
+    for (;;) {
+      unsigned long elapsed = (millis() - startMs) / 1000; // seconds
+      unsigned long hh = (elapsed / 3600) % 24;
+      unsigned long mm = (elapsed / 60) % 60;
+      unsigned long ss = elapsed % 60;
+
+      char line0[17];
+      char line1[17];
+      snprintf(line0, sizeof(line0), "Clock Mode       ");
+      snprintf(line1, sizeof(line1), "%02lu:%02lu:%02lu        ", hh, mm, ss);
+      writeStringToDisplay(0, line0);
+      writeStringToDisplay(1, line1);
+
+      // check touch to exit
+      for (int t = 0; t < 10; ++t) {
+        long v = touchRead(kTouchPin);
+        bool touchedNow = (v >= 0 && v < kTouchThreshold);
+        if (touchedNow) {
+          writeStringToDisplay(0, "Exiting Clock...");
+          vTaskDelay(pdMS_TO_TICKS(1000));
+          return;
+        }
+        vTaskDelay(pdMS_TO_TICKS(100));
+      }
+    }
+  };
+
+  // Initial display of menu
+  // Clear screen once and show initial menu
+  tasks::DisplayMessage clr{};
+  clr.cmd = tasks::DisplayCmd::Clear;
+  tasks::sendDisplayMessage(clr, pdMS_TO_TICKS(200));
+  writeStringToDisplay(0, "Menu:");
+  writeStringToDisplay(1, menuItems[menuIndex]);
+
+  TickType_t touchStartTick = 0;
   for (;;) {
     long v = touchRead(kTouchPin);
     bool touched = (v >= 0 && v < kTouchThreshold);
 
-    // Atualiza display em mudanças (opcional)
-    if (lastValue == -1 || (touched && lastValue != 1) || (!touched && lastValue != 0)) {
-      tasks::DisplayMessage dmsg{};
-      dmsg.cmd = tasks::DisplayCmd::WriteChar;
-      dmsg.col = 3;
-      dmsg.row = 0;
-      dmsg.c = touched ? 'H' : 'L';
-      tasks::sendDisplayMessage(dmsg, 0);
+    TickType_t now = xTaskGetTickCount();
+
+    // Edge: touch started
+    if (touched && !lastTouched) {
+      touchStartTick = now;
     }
 
-    // Detecta borda de subida (novo toque) com debounce
-    TickType_t now = xTaskGetTickCount();
-    if (touched && !lastTouched && (now - lastTriggerTick) >= kTouchDebounce) {
-      tasks::StepperMessage smsg{};
-      smsg.steps = kStepsPerTouch;
-      if (nextSlowClockwise) {
-        smsg.intervalUs = kSlowIntervalUs;
-        smsg.direction = tasks::StepperDirection::Clockwise;
+    // Edge: touch released
+    if (!touched && lastTouched) {
+      TickType_t held = now - touchStartTick;
+      if (held >= kSelectHoldMs) {
+        // Select current menu item
+        const char* selected = menuItems[menuIndex];
+        char buf[17];
+        snprintf(buf, sizeof(buf), "Selected:%s", selected);
+        writeStringToDisplay(0, buf);
+        vTaskDelay(pdMS_TO_TICKS(400));
+
+        // Dispatch action per menu index (Art=0, Clock=1)
+        if (menuIndex == 0) {
+          runArtMode();
+        } else if (menuIndex == 1) {
+          runClockMode();
+        } else {
+          // Shouldn't happen but provide feedback
+          writeStringToDisplay(0, "Invalid option");
+          vTaskDelay(pdMS_TO_TICKS(400));
+        }
+
+        // After action, show menu again
+        writeStringToDisplay(0, "Menu:");
+        writeStringToDisplay(1, menuItems[menuIndex]);
       } else {
-        smsg.intervalUs = kFastIntervalUs;
-        smsg.direction = tasks::StepperDirection::CounterClockwise;
+        // Short tap -> advance menu
+        menuIndex = (menuIndex + 1) % kMenuCount;
+        writeStringToDisplay(1, menuItems[menuIndex]);
       }
-
-      // Envia comando ao motor de passo
-      tasks::sendStepperMessage(smsg, 0);
-
-      // Alterna para a próxima vez
-      nextSlowClockwise = !nextSlowClockwise;
-      lastTriggerTick = now;
     }
 
     lastTouched = touched;

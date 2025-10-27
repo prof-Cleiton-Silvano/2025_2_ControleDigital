@@ -24,7 +24,7 @@ LiquidCrystal_I2C lcd(kLcdAddress, kLcdColumns, kLcdRows);
 QueueHandle_t xDisplayQueue = nullptr;
 
 // Maximum number of queued messages
-constexpr size_t kDisplayQueueLength = 16;
+constexpr size_t kDisplayQueueLength = 64;  // increased to avoid dropped chars
 
 // Display task implementation - shows "Hello World" and a counter
 void displayTask(void* /*params*/) {
@@ -56,7 +56,8 @@ void displayTask(void* /*params*/) {
           break;
       }
     }
-    vTaskDelay(pdMS_TO_TICKS(100));  // Pequena espera para evitar uso excessivo de CPU
+    // Small delay to allow batching of queued messages but keep display responsive
+    vTaskDelay(pdMS_TO_TICKS(20));
   }
 }
 

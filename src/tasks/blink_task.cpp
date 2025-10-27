@@ -31,19 +31,11 @@ void blinkTask(void* /*params*/) {
   // Apenas aguarda a display task inicializar e gerenciar o LCD
   vTaskDelay(pdMS_TO_TICKS(500)); // Pequena espera para permitir init do display
   
-  tasks::DisplayMessage msg;
-
   for (;;) {
     // Blink LED
     ledOn = !ledOn;
     hal::setBuiltinLed(ledOn);
-
-    // Envia mensagem para a display task
-    msg.cmd = tasks::DisplayCmd::WriteChar;
-    msg.col = 0;
-    msg.row = 0;
-    msg.c = ledOn ? '1' : '0';
-    tasks::sendDisplayMessage(msg, 0); // não bloqueia, se fila cheia, ignora
+    // (Display update disabled to allow menu to control the LCD)
 
     // letra_idx++;
     // if (letra_idx >= palavra_len) {
