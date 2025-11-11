@@ -19,12 +19,12 @@ void setup() {
   const UBaseType_t stepperPriority = tskIDLE_PRIORITY + 3;  // High priority - actuator output.
 
   // Start display first so it initializes the LCD and the message queue.
-  tasks::startDisplayTask(displayPriority);
+  // tasks::startDisplayTask(displayPriority);
   tasks::startBlinkTask(blinkPriority);
   
   // Sistema de controle digital: Sensor → Controlador → Atuador
-  tasks::startTouchTask(touchPriority);      // ENTRADA: lê sensor capacitivo
-  tasks::startControlTask(controlPriority);  // PROCESSAMENTO: implementa função de transferência
+  // tasks::startTouchTask(touchPriority);      // ENTRADA: lê sensor capacitivo
+  // tasks::startControlTask(csontrolPriority);  // PROCESSAMENTO: implementa função de transferência
   tasks::startStepperTask(stepperPriority);  // SAÍDA: controla motor de passo
 }
 

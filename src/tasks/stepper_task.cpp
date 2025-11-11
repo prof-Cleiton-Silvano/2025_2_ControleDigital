@@ -16,7 +16,7 @@ QueueHandle_t xStepperQueue = nullptr;
 constexpr size_t kStepperQueueLength = 8;
 
 // Minimum safe interval to prevent motor stalling (microseconds)
-constexpr uint32_t kMinIntervalUs = 50;
+constexpr uint32_t kMinIntervalUs = 800;
 
 // Stepper task implementation - processes movement commands from queue
 void stepperTask(void* /*params*/) {
@@ -43,16 +43,16 @@ void stepperTask(void* /*params*/) {
       hal::setStepperDirection(clockwise);
 
       // Enable motor
-      hal::setStepperEnable(true);
+      hal::setStepperEnable(false);
 
       // Small delay to allow driver to stabilize after enable
-      delayMicroseconds(10);
+      delayMicroseconds(100);
 
       // Execute steps with precise timing
       for (uint32_t i = 0; i < msg.steps; i++) {
         // Generate pulse: HIGH
         hal::setStepperPulse(true);
-        delayMicroseconds(5);  // Minimum pulse width for TB6600 (2.5us typical)
+        delayMicroseconds(safeInterval);  // Minimum pulse width for TB6600 (2.5us typical)
 
         // Generate pulse: LOW
         hal::setStepperPulse(false);
@@ -63,8 +63,8 @@ void stepperTask(void* /*params*/) {
         }
 
         // Allow other high-priority tasks to run periodically
-        // Check every 100 steps to maintain responsiveness
-        if (i % 100 == 0) {
+        // Check every 50 steps to maintain responsiveness
+        if (i % 50 == 0) {
           taskYIELD();
         }
       }
