@@ -18,6 +18,28 @@ constexpr size_t kStepperQueueLength = 8;
 // Minimum safe interval to prevent motor stalling (microseconds)
 constexpr uint32_t kMinIntervalUs = 800;
 
+// Ensures interval respects safe minimum
+uint32_t clampInterval(uint32_t intervalUs) {
+  return (intervalUs < kMinIntervalUs) ? kMinIntervalUs : intervalUs;
+}
+
+// Linear interpolation helper for ramp intervals
+uint32_t interpolateInterval(uint32_t startUs, uint32_t endUs, uint32_t idx, uint32_t totalSteps) {
+  if (totalSteps == 0) return clampInterval(endUs);
+  if (totalSteps == 1) return clampInterval(startUs);
+  if (idx >= totalSteps) idx = totalSteps - 1;
+
+  int64_t start64 = static_cast<int64_t>(startUs);
+  int64_t end64 = static_cast<int64_t>(endUs);
+  int64_t delta = end64 - start64;
+  int64_t value = start64 + (delta * static_cast<int64_t>(idx)) / static_cast<int64_t>(totalSteps - 1);
+
+  if (value < static_cast<int64_t>(kMinIntervalUs)) {
+    value = static_cast<int64_t>(kMinIntervalUs);
+  }
+  return static_cast<uint32_t>(value);
+}
+
 // Stepper task implementation - processes movement commands from queue
 void stepperTask(void* /*params*/) {
   // Create the queue if not already created
@@ -33,10 +55,21 @@ void stepperTask(void* /*params*/) {
     // Wait for a command from the queue
     if (xStepperQueue != nullptr && xQueueReceive(xStepperQueue, &msg, portMAX_DELAY) == pdTRUE) {
       // Validate interval to prevent motor damage
-      uint32_t safeInterval = msg.intervalUs;
-      if (safeInterval < kMinIntervalUs) {
-        safeInterval = kMinIntervalUs;
-      }
+      const uint32_t cruiseInterval = clampInterval(msg.intervalUs);
+
+      const uint32_t accelStartInterval =
+          clampInterval((msg.accelStartIntervalUs == 0) ? cruiseInterval
+                                                        : msg.accelStartIntervalUs);
+      const uint32_t decelEndInterval =
+          clampInterval((msg.decelEndIntervalUs == 0) ? cruiseInterval
+                                                      : msg.decelEndIntervalUs);
+
+      uint32_t accelSteps = (msg.accelRampSteps > msg.steps) ? msg.steps : msg.accelRampSteps;
+      uint32_t remainingSteps = msg.steps - accelSteps;
+      uint32_t decelSteps =
+          (msg.decelRampSteps > remainingSteps) ? remainingSteps : msg.decelRampSteps;
+
+      const uint32_t cruiseSteps = msg.steps - accelSteps - decelSteps;
 
       // Set direction
       bool clockwise = (msg.direction == StepperDirection::Clockwise);
@@ -50,16 +83,26 @@ void stepperTask(void* /*params*/) {
 
       // Execute steps with precise timing
       for (uint32_t i = 0; i < msg.steps; i++) {
+        uint32_t currentInterval = cruiseInterval;
+
+        if (accelSteps > 0 && i < accelSteps) {
+          currentInterval = interpolateInterval(accelStartInterval, cruiseInterval, i, accelSteps);
+        } else if (decelSteps > 0 && i >= (accelSteps + cruiseSteps)) {
+          uint32_t decelIndex = i - (accelSteps + cruiseSteps);
+          currentInterval =
+              interpolateInterval(cruiseInterval, decelEndInterval, decelIndex, decelSteps);
+        }
+
         // Generate pulse: HIGH
         hal::setStepperPulse(true);
-        delayMicroseconds(safeInterval);  // Minimum pulse width for TB6600 (2.5us typical)
+        delayMicroseconds(currentInterval);  // Minimum pulse width for TB6600 (2.5us typical)
 
         // Generate pulse: LOW
         hal::setStepperPulse(false);
 
         // Wait for the specified interval (minus pulse time)
-        if (safeInterval > 5) {
-          delayMicroseconds(safeInterval - 5);
+        if (currentInterval > 5) {
+          delayMicroseconds(currentInterval - 5);
         }
 
         // Allow other high-priority tasks to run periodically

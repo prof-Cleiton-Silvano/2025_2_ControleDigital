@@ -8,19 +8,25 @@
 namespace tasks {
 namespace {
 
-constexpr uint32_t kStepsPerCommand = 400;
-constexpr uint32_t kPulseIntervalUs = 1000UL;  // 1000 ms entre pulsos
+constexpr uint32_t kStepsPerCommand = 500;
+constexpr uint32_t kPulseIntervalUs = 800UL;  // 1000 ms entre pulsos
 constexpr TickType_t kDirectionSwapDelay = pdMS_TO_TICKS(5000);
+constexpr uint32_t kRampSteps = 75;
+constexpr uint32_t kRampIntervalMultiplier = 2;
 
 void stepperCommandTask(void* /*params*/) {
   StepperDirection direction = StepperDirection::Clockwise;
-  StepperMessage msg{}; // TODO: Verificar overflow de fila
+  StepperMessage msg{};
   
   for (;;) {
     // Monta mensagem esperada pelo stepper_task e envia para a fila
     msg.steps = kStepsPerCommand;
     msg.intervalUs = kPulseIntervalUs;
     msg.direction = direction;
+    msg.accelRampSteps = kRampSteps;
+    msg.decelRampSteps = kRampSteps;
+    msg.accelStartIntervalUs = kPulseIntervalUs * kRampIntervalMultiplier;
+    msg.decelEndIntervalUs = kPulseIntervalUs * kRampIntervalMultiplier;
     sendStepperMessage(msg, portMAX_DELAY);
 
     vTaskDelay(kDirectionSwapDelay);

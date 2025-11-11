@@ -238,7 +238,7 @@ void processControlLaw(const TouchInputMessage& input) {
   // Se há movimento a ser realizado, enviamos o comando ao motor
   if (commandSteps > 0) {
     // Monta a mensagem de controle do motor
-    StepperMessage motorCmd;
+    StepperMessage motorCmd{};
     motorCmd.steps = commandSteps;          // Número de passos calculado
     motorCmd.intervalUs = speedInterval;    // Velocidade baseada na zona
     motorCmd.direction = dir;               // Direção do movimento

@@ -13,8 +13,12 @@ enum class StepperDirection : uint8_t {
 // Message structure sent to the stepper task
 struct StepperMessage {
   uint32_t steps;                    // Number of steps to move
-  uint32_t intervalUs;               // Interval between steps in microseconds
+  uint32_t intervalUs;               // Cruise interval between steps in microseconds
   StepperDirection direction;        // Direction of movement
+  uint32_t accelRampSteps;           // Steps dedicated to acceleration ramp (0 = none)
+  uint32_t decelRampSteps;           // Steps dedicated to deceleration ramp (0 = none)
+  uint32_t accelStartIntervalUs;     // Starting interval for accel ramp (fallback: intervalUs)
+  uint32_t decelEndIntervalUs;       // Ending interval for decel ramp (fallback: intervalUs)
 };
 
 // Enqueue a message to the stepper task. Returns true on success.
