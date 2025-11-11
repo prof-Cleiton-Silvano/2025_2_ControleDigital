@@ -24,9 +24,9 @@ constexpr uint8_t kLimitBtn1Pin = 26;
 constexpr uint8_t kLimitBtn2Pin = 27;
 
 // Pinos do driver TB6600 para motor de passo
-constexpr uint8_t kStepperEnablePin = GPIO_NUM_15;     // ENA - GPIO 23 (LOW = enabled, HIGH = disabled)
-constexpr uint8_t kStepperDirectionPin = GPIO_NUM_2;  // DIR - GPIO 19
-constexpr uint8_t kStepperPulsePin = GPIO_NUM_4;      // PUL/STEP - GPIO 18
+constexpr uint8_t kStepperEnablePin = 18;     // ENA - GPIO 23 (LOW = enabled, HIGH = disabled)
+constexpr uint8_t kStepperDirectionPin = 17;  // DIR - GPIO 19
+constexpr uint8_t kStepperPulsePin = 16;      // PUL/STEP - GPIO 18
 }  // namespace
 
 void initBoard() {

@@ -43,7 +43,7 @@ void stepperTask(void* /*params*/) {
       hal::setStepperDirection(clockwise);
 
       // Enable motor
-      hal::setStepperEnable(false);
+      hal::setStepperEnable(true);
 
       // Small delay to allow driver to stabilize after enable
       delayMicroseconds(100);

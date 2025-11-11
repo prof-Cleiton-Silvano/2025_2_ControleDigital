@@ -7,6 +7,7 @@
 #include "tasks/touch_task.h"
 #include "tasks/control_task.h"
 #include "tasks/stepper_task.h"
+#include "tasks/stepper_command_task.h"
 
 // Application entry point: configure hardware and spawn the initial tasks.
 void setup() {
@@ -17,6 +18,7 @@ void setup() {
   const UBaseType_t touchPriority = tskIDLE_PRIORITY + 1;    // Low priority - sensor input.
   const UBaseType_t controlPriority = tskIDLE_PRIORITY + 2;  // Medium priority - control algorithm.
   const UBaseType_t stepperPriority = tskIDLE_PRIORITY + 3;  // High priority - actuator output.
+  const UBaseType_t stepperCommandPriority = tskIDLE_PRIORITY + 1;  // Baixa prioridade - envia comandos.
 
   // Start display first so it initializes the LCD and the message queue.
   // tasks::startDisplayTask(displayPriority);
@@ -26,6 +28,7 @@ void setup() {
   // tasks::startTouchTask(touchPriority);      // ENTRADA: lê sensor capacitivo
   // tasks::startControlTask(csontrolPriority);  // PROCESSAMENTO: implementa função de transferência
   tasks::startStepperTask(stepperPriority);  // SAÍDA: controla motor de passo
+  tasks::startStepperCommandTask(stepperCommandPriority);  // Gera comandos periódicos
 }
 
 void loop() {
