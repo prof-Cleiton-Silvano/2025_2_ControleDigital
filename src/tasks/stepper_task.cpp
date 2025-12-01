@@ -2,6 +2,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/queue.h>
+#include <ESP_FlexyStepper.h>
 
 #include "tasks/stepper_task.h"
 #include "hal/board.h"
@@ -15,30 +16,8 @@ QueueHandle_t xStepperQueue = nullptr;
 // Maximum number of queued commands
 constexpr size_t kStepperQueueLength = 8;
 
-// Minimum safe interval to prevent motor stalling (microseconds)
-constexpr uint32_t kMinIntervalUs = 800;
-
-// Ensures interval respects safe minimum
-uint32_t clampInterval(uint32_t intervalUs) {
-  return (intervalUs < kMinIntervalUs) ? kMinIntervalUs : intervalUs;
-}
-
-// Linear interpolation helper for ramp intervals
-uint32_t interpolateInterval(uint32_t startUs, uint32_t endUs, uint32_t idx, uint32_t totalSteps) {
-  if (totalSteps == 0) return clampInterval(endUs);
-  if (totalSteps == 1) return clampInterval(startUs);
-  if (idx >= totalSteps) idx = totalSteps - 1;
-
-  int64_t start64 = static_cast<int64_t>(startUs);
-  int64_t end64 = static_cast<int64_t>(endUs);
-  int64_t delta = end64 - start64;
-  int64_t value = start64 + (delta * static_cast<int64_t>(idx)) / static_cast<int64_t>(totalSteps - 1);
-
-  if (value < static_cast<int64_t>(kMinIntervalUs)) {
-    value = static_cast<int64_t>(kMinIntervalUs);
-  }
-  return static_cast<uint32_t>(value);
-}
+// ESP-FlexyStepper instance
+ESP_FlexyStepper stepper;
 
 // Stepper task implementation - processes movement commands from queue
 void stepperTask(void* /*params*/) {
@@ -47,82 +26,57 @@ void stepperTask(void* /*params*/) {
     xStepperQueue = xQueueCreate(kStepperQueueLength, sizeof(StepperMessage));
   }
 
-  // Motor starts disabled
-  hal::setStepperEnable(false);
-
+  // Configure stepper motor using ESP-FlexyStepper
+  stepper.connectToPins(hal::kStepperPulsePin, hal::kStepperDirectionPin);
+  
+  // Configure enable pin (TB6600: LOW = enabled, HIGH = disabled)
+  pinMode(hal::kStepperEnablePin, OUTPUT);
+  digitalWrite(hal::kStepperEnablePin, HIGH);  // Start disabled
+  
+  // Set default speed and acceleration (can be overridden by messages)
+  stepper.setSpeedInStepsPerSecond(500);
+  stepper.setAccelerationInStepsPerSecondPerSecond(200);
+  
   StepperMessage msg;
   for (;;) {
-    // Wait for a command from the queue
-    if (xStepperQueue != nullptr && xQueueReceive(xStepperQueue, &msg, portMAX_DELAY) == pdTRUE) {
-      // Validate interval to prevent motor damage
-      const uint32_t cruiseInterval = clampInterval(msg.intervalUs);
-
-      const uint32_t accelStartInterval =
-          clampInterval((msg.accelStartIntervalUs == 0) ? cruiseInterval
-                                                        : msg.accelStartIntervalUs);
-      const uint32_t decelEndInterval =
-          clampInterval((msg.decelEndIntervalUs == 0) ? cruiseInterval
-                                                      : msg.decelEndIntervalUs);
-
-      uint32_t accelSteps = (msg.accelRampSteps > msg.steps) ? msg.steps : msg.accelRampSteps;
-      uint32_t remainingSteps = msg.steps - accelSteps;
-      uint32_t decelSteps =
-          (msg.decelRampSteps > remainingSteps) ? remainingSteps : msg.decelRampSteps;
-
-      const uint32_t cruiseSteps = msg.steps - accelSteps - decelSteps;
-
-      // Set direction
-      bool clockwise = (msg.direction == StepperDirection::Clockwise);
-      hal::setStepperDirection(clockwise);
-
-      // Enable motor
-      hal::setStepperEnable(true);
-
-      // Small delay to allow driver to stabilize after enable
-      delayMicroseconds(100);
-
-      // Execute steps with precise timing
-      for (uint32_t i = 0; i < msg.steps; i++) {
-        uint32_t currentInterval = cruiseInterval;
-
-        if (accelSteps > 0 && i < accelSteps) {
-          currentInterval = interpolateInterval(accelStartInterval, cruiseInterval, i, accelSteps);
-        } else if (decelSteps > 0 && i >= (accelSteps + cruiseSteps)) {
-          uint32_t decelIndex = i - (accelSteps + cruiseSteps);
-          currentInterval =
-              interpolateInterval(cruiseInterval, decelEndInterval, decelIndex, decelSteps);
-        }
-
-        // Generate pulse: HIGH
-        hal::setStepperPulse(true);
-        delayMicroseconds(currentInterval);  // Minimum pulse width for TB6600 (2.5us typical)
-
-        // Generate pulse: LOW
-        hal::setStepperPulse(false);
-
-        // Wait for the specified interval (minus pulse time)
-        if (currentInterval > 5) {
-          delayMicroseconds(currentInterval - 5);
-        }
-
-        // Allow other high-priority tasks to run periodically
-        // Check every 50 steps to maintain responsiveness
-        if (i % 50 == 0) {
-          taskYIELD();
-        }
+    // Process stepper service (handles movement timing)
+    stepper.processMovement();
+    
+    // Check for new commands (non-blocking)
+    if (xStepperQueue != nullptr && xQueueReceive(xStepperQueue, &msg, 0) == pdTRUE) {
+      // Enable motor before movement
+      digitalWrite(hal::kStepperEnablePin, LOW);
+      
+      // Configure speed and acceleration
+      stepper.setSpeedInStepsPerSecond(msg.speedInStepsPerSec);
+      stepper.setAccelerationInStepsPerSecondPerSecond(msg.accelInStepsPerSecSec);
+      
+      // Execute movement (relative or absolute)
+      if (msg.isRelative) {
+        stepper.setTargetPositionRelativeInSteps(msg.targetPosition);
+      } else {
+        stepper.setTargetPositionInSteps(msg.targetPosition);
       }
-
-      // Disable motor after movement completes (optional - saves power)
-      // Comment out the next line if you want the motor to hold position
-      // hal::setStepperEnable(false);
+      
+      // Wait for movement to complete
+      while (!stepper.motionComplete()) {
+        stepper.processMovement();
+        taskYIELD();  // Allow other tasks to run
+      }
+      
+      // Optional: disable motor after movement to save power
+      // digitalWrite(hal::kStepperEnablePin, HIGH);
     }
+    
+    // Small delay to prevent tight loop and allow other tasks
+    vTaskDelay(pdMS_TO_TICKS(1));
   }
 }
 
 }  // namespace
 
 void startStepperTask(UBaseType_t priority) {
-  constexpr uint32_t kStackDepthWords = 2048;
+  constexpr uint32_t kStackDepthWords = 4096;  // Increased for FlexyStepper
   xTaskCreate(
       stepperTask,
       "stepper_motor",
@@ -139,6 +93,19 @@ bool sendStepperMessage(const StepperMessage& msg, TickType_t ticksToWait) {
     if (xStepperQueue == nullptr) return false;
   }
   return xQueueSend(xStepperQueue, &msg, ticksToWait) == pdTRUE;
+}
+
+int32_t getStepperPosition() {
+  return stepper.getCurrentPositionInSteps();
+}
+
+void emergencyStopStepper() {
+  stepper.emergencyStop();
+}
+
+void setStepperEnabled(bool enabled) {
+  // TB6600: LOW = enabled, HIGH = disabled
+  digitalWrite(hal::kStepperEnablePin, enabled ? LOW : HIGH);
 }
 
 }  // namespace tasks

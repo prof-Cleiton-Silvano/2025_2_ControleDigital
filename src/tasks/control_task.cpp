@@ -228,20 +228,23 @@ void processControlLaw(const TouchInputMessage& input) {
   // -------------------------------------------------------------------------
   // Alternamos a direção para demonstrar controle bidirecional
   // Em um sistema real, isso seria determinado pelo sinal do erro
-  StepperDirection dir = gControlState.alternateDirection ? 
-                         StepperDirection::CounterClockwise : 
-                         StepperDirection::Clockwise;
+  int32_t directionMultiplier = gControlState.alternateDirection ? -1 : 1;
   
   // -------------------------------------------------------------------------
   // ETAPA 9: ENVIAR COMANDO AO ATUADOR (saída do sistema)
   // -------------------------------------------------------------------------
   // Se há movimento a ser realizado, enviamos o comando ao motor
   if (commandSteps > 0) {
-    // Monta a mensagem de controle do motor
+    // Converte velocidade de intervalo (μs) para steps/segundo
+    // Fórmula: steps/sec = 1.000.000 / intervalUs
+    float speedInStepsPerSec = (speedInterval > 0) ? (1000000.0f / speedInterval) : 500.0f;
+    
+    // Monta a mensagem de controle do motor (usando FlexyStepper)
     StepperMessage motorCmd{};
-    motorCmd.steps = commandSteps;          // Número de passos calculado
-    motorCmd.intervalUs = speedInterval;    // Velocidade baseada na zona
-    motorCmd.direction = dir;               // Direção do movimento
+    motorCmd.targetPosition = commandSteps * directionMultiplier;  // Passos com direção
+    motorCmd.speedInStepsPerSec = speedInStepsPerSec;              // Velocidade calculada
+    motorCmd.accelInStepsPerSecSec = 200.0f;                       // Aceleração padrão
+    motorCmd.isRelative = true;                                    // Movimento relativo
     
     // Envia comando para a fila do motor (sistema de atuação)
     sendStepperMessage(motorCmd, 0);
@@ -251,7 +254,7 @@ void processControlLaw(const TouchInputMessage& input) {
     displayMsg.cmd = DisplayCmd::WriteChar;
     displayMsg.col = 5;
     displayMsg.row = 0;
-    displayMsg.c = (dir == StepperDirection::Clockwise) ? 'R' : 'L';
+    displayMsg.c = (directionMultiplier > 0) ? 'R' : 'L';
     sendDisplayMessage(displayMsg, 0);
   }
   

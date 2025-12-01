@@ -8,32 +8,31 @@
 namespace tasks {
 namespace {
 
-constexpr uint32_t kStepsPerCommand = 500;
-constexpr uint32_t kPulseIntervalUs = 800UL;  // 1000 ms entre pulsos
-constexpr TickType_t kDirectionSwapDelay = pdMS_TO_TICKS(5000);
-constexpr uint32_t kRampSteps = 75;
-constexpr uint32_t kRampIntervalMultiplier = 2;
+// Configurações de movimento
+constexpr int32_t kStepsPerCommand = 500;       // Número de passos por movimento
+constexpr float kSpeedStepsPerSec = 500.0f;     // Velocidade: 500 passos/segundo
+constexpr float kAccelStepsPerSecSec = 200.0f;  // Aceleração: 200 passos/segundo²
+constexpr TickType_t kDirectionSwapDelay = pdMS_TO_TICKS(5000);  // 5 segundos entre movimentos
 
 void stepperCommandTask(void* /*params*/) {
-  StepperDirection direction = StepperDirection::Clockwise;
+  bool moveForward = true;
   StepperMessage msg{};
   
   for (;;) {
-    // Monta mensagem esperada pelo stepper_task e envia para a fila
-    msg.steps = kStepsPerCommand;
-    msg.intervalUs = kPulseIntervalUs;
-    msg.direction = direction;
-    msg.accelRampSteps = kRampSteps;
-    msg.decelRampSteps = kRampSteps;
-    msg.accelStartIntervalUs = kPulseIntervalUs * kRampIntervalMultiplier;
-    msg.decelEndIntervalUs = kPulseIntervalUs * kRampIntervalMultiplier;
+    // Configura mensagem para movimento relativo
+    msg.targetPosition = moveForward ? kStepsPerCommand : -kStepsPerCommand;
+    msg.speedInStepsPerSec = kSpeedStepsPerSec;
+    msg.accelInStepsPerSecSec = kAccelStepsPerSecSec;
+    msg.isRelative = true;  // Movimento relativo à posição atual
+    
+    // Envia comando para o stepper task
     sendStepperMessage(msg, portMAX_DELAY);
 
+    // Aguarda antes de inverter direção
     vTaskDelay(kDirectionSwapDelay);
 
-    direction = (direction == StepperDirection::Clockwise)
-                    ? StepperDirection::CounterClockwise
-                    : StepperDirection::Clockwise;
+    // Inverte direção para próximo movimento
+    moveForward = !moveForward;
   }
 }
 
