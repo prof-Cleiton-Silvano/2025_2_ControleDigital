@@ -1,75 +1,46 @@
+/**
+ * @file blink_task.cpp
+ * @brief Implementação da task de diagnóstico do LED
+ * 
+ * Task simples que alterna o estado do LED built-in a cada 1 segundo.
+ * Serve como indicador visual de que o sistema está funcionando.
+ */
+
 #include <Arduino.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-
-#include "hal/board.h"
+#include "config.h"
 #include "tasks/blink_task.h"
-#include <Wire.h>
-#include <LiquidCrystal_I2C.h>
 
-#include <freertos/semphr.h>
-#include "tasks/display_task.h"
-
-namespace tasks {
-namespace {
-
-// LCD config (igual ao display_task.cpp)
-constexpr uint8_t kLcdAddress = 0x27;
-constexpr uint8_t kLcdColumns = 16;
-constexpr uint8_t kLcdRows = 2;
-constexpr uint8_t kSdaPin = 21;
-constexpr uint8_t kSclPin = 22;
-const char* palavra = "Controle Digital";
-constexpr size_t palavra_len = 16; // "Controle Digital" tem 16 caracteres
-
-void blinkTask(void* /*params*/) {
-  constexpr TickType_t kBlinkDelayTicks = pdMS_TO_TICKS(1000);
-  bool ledOn = false;
-  size_t letra_idx = 0;
-
-  // Inicializa LCD
-  // Apenas aguarda a display task inicializar e gerenciar o LCD
-  vTaskDelay(pdMS_TO_TICKS(500)); // Pequena espera para permitir init do display
+/**
+ * @brief Loop principal da task de blink
+ * 
+ * Alterna o LED built-in entre ligado e desligado a cada segundo.
+ * Usa vTaskDelay para não consumir CPU desnecessariamente.
+ */
+static void blinkTask(void* params) {
+  (void)params;  // Parâmetro não utilizado
   
-  tasks::DisplayMessage msg;
-
+  bool ledState = false;
+  
   for (;;) {
-    // Blink LED
-    ledOn = !ledOn;
-    hal::setBuiltinLed(ledOn);
-
-    // Envia mensagem para a display task
-    msg.cmd = tasks::DisplayCmd::WriteChar;
-    msg.col = 0;
-    msg.row = 0;
-    msg.c = ledOn ? '1' : '0';
-    tasks::sendDisplayMessage(msg, 0); // não bloqueia, se fila cheia, ignora
-
-    // letra_idx++;
-    // if (letra_idx >= palavra_len) {
-    //   vTaskDelay(kBlinkDelayTicks);
-    //   // pede para display limpar
-    //   tasks::DisplayMessage clr{};
-    //   clr.cmd = tasks::DisplayCmd::Clear;
-    //   tasks::sendDisplayMessage(clr, 0);
-    //   letra_idx = 0;
-    // }
-
-    vTaskDelay(kBlinkDelayTicks);
+    // Alterna estado do LED
+    ledState = !ledState;
+    digitalWrite(PIN_LED_BUILTIN, ledState ? HIGH : LOW);
+    
+    // Aguarda 1 segundo antes de alternar novamente
+    vTaskDelay(pdMS_TO_TICKS(BLINK_INTERVAL_MS));
   }
 }
 
-}  // namespace
-
 void startBlinkTask(UBaseType_t priority) {
-  constexpr uint32_t kStackDepthWords = 2048;
+  // Cria a task com stack de 1KB (suficiente para operação simples)
   xTaskCreate(
-      blinkTask,
-      "blink_led",
-      kStackDepthWords,
-      nullptr,
-      priority,
-      nullptr);
+    blinkTask,           // Função da task
+    "LED_Blink",         // Nome para debug
+    1024,                // Stack size (palavras de 32 bits)
+    nullptr,             // Parâmetro (não usado)
+    priority,            // Prioridade
+    nullptr              // Handle (não precisamos)
+  );
 }
-
-}  // namespace tasks

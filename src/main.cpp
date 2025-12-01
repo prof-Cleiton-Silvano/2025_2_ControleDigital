@@ -1,36 +1,57 @@
+/**
+ * @file main.cpp
+ * @brief Programa principal - Sistema de Controle de Motor de Passo
+ * 
+ * Sistema baseado em FreeRTOS com duas tasks principais:
+ * 1. Blink Task - LED de diagnóstico (baixa prioridade)
+ * 2. Stepper Task - Controle do motor com fim de curso (alta prioridade)
+ * 
+ * Hardware: ESP32 Dev Kit V1 + Driver TB6600 + Motor de Passo
+ */
+
 #include <Arduino.h>
 #include <freertos/FreeRTOS.h>
-
-#include "hal/board.h"
+#include <freertos/task.h>
+#include "config.h"
 #include "tasks/blink_task.h"
-#include "tasks/display_task.h"
-#include "tasks/touch_task.h"
-#include "tasks/control_task.h"
 #include "tasks/stepper_task.h"
-#include "tasks/stepper_command_task.h"
 
-// Application entry point: configure hardware and spawn the initial tasks.
+/**
+ * @brief Função de inicialização do Arduino/ESP32
+ * 
+ * Configura o hardware e cria as tasks do FreeRTOS.
+ * Após esta função, o scheduler do FreeRTOS assume o controle.
+ */
 void setup() {
-  hal::initBoard();
-
-  const UBaseType_t blinkPriority = tskIDLE_PRIORITY + 1;    // Low priority task.
-  const UBaseType_t displayPriority = tskIDLE_PRIORITY + 1;  // Low priority task.
-  const UBaseType_t touchPriority = tskIDLE_PRIORITY + 1;    // Low priority - sensor input.
-  const UBaseType_t controlPriority = tskIDLE_PRIORITY + 2;  // Medium priority - control algorithm.
-  const UBaseType_t stepperPriority = tskIDLE_PRIORITY + 3;  // High priority - actuator output.
-  const UBaseType_t stepperCommandPriority = tskIDLE_PRIORITY + 1;  // Baixa prioridade - envia comandos.
-
-  // Start display first so it initializes the LCD and the message queue.
-  // tasks::startDisplayTask(displayPriority);
-  tasks::startBlinkTask(blinkPriority);
+  // Inicializa porta serial para debug (opcional)
+  Serial.begin(115200);
+  Serial.println("=== Sistema de Controle de Motor de Passo ===");
+  Serial.println("Inicializando hardware...");
   
-  // Sistema de controle digital: Sensor → Controlador → Atuador
-  // tasks::startTouchTask(touchPriority);      // ENTRADA: lê sensor capacitivo
-  // tasks::startControlTask(csontrolPriority);  // PROCESSAMENTO: implementa função de transferência
-  tasks::startStepperTask(stepperPriority);  // SAÍDA: controla motor de passo
-  tasks::startStepperCommandTask(stepperCommandPriority);  // Gera comandos periódicos
+  // Configura todos os pinos de I/O
+  initHardwarePins();
+  
+  Serial.println("Criando tasks FreeRTOS...");
+  
+  // Cria task de diagnóstico (LED piscante) - Baixa prioridade
+  startBlinkTask(PRIORITY_BLINK_TASK);
+  
+  // Cria task de controle do motor - Alta prioridade
+  startStepperTask(PRIORITY_STEPPER_TASK);
+  
+  Serial.println("Sistema iniciado com sucesso!");
+  Serial.println("Tasks ativas:");
+  Serial.println("  - LED Blink (prioridade 1)");
+  Serial.println("  - Stepper Motor (prioridade 3)");
 }
 
+/**
+ * @brief Loop principal do Arduino (não utilizado)
+ * 
+ * Com FreeRTOS, o loop() não é usado. O scheduler gerencia as tasks.
+ * Mantemos um delay infinito para liberar CPU.
+ */
 void loop() {
-  vTaskDelay(portMAX_DELAY);  // Nothing left for the Arduino loop.
+  // Suspende indefinidamente - FreeRTOS gerencia tudo
+  vTaskDelay(portMAX_DELAY);
 }
