@@ -32,6 +32,10 @@ constexpr uint8_t PIN_USER_BTN_3 = 25;
 constexpr uint8_t PIN_LIMIT_SWITCH_1 = 26;  // Fim de curso 1
 constexpr uint8_t PIN_LIMIT_SWITCH_2 = 27;  // Fim de curso 2
 
+// Sensor Óptico EE-SH3 Photomicrosensor (Transmissive)
+// Conectar saída do sensor ao pino GPIO (LOW = bloqueado, HIGH = desbloqueado)
+constexpr uint8_t PIN_PHOTO_SENSOR = 34;  // Sensor óptico (entrada analógica)
+
 // Driver de Motor de Passo TB6600
 // Conectar aos pinos correspondentes do driver TB6600
 constexpr uint8_t PIN_STEPPER_ENABLE = 18;     // ENA- (LOW=ativo, HIGH=desabilitado)
@@ -45,14 +49,18 @@ constexpr uint8_t PIN_STEPPER_PULSE = 16;      // PUL- (pulso de step)
 // Prioridades das Tasks FreeRTOS
 // Quanto maior o número, maior a prioridade
 constexpr uint8_t PRIORITY_BLINK_TASK = 1;    // Baixa prioridade (diagnóstico)
+constexpr uint8_t PRIORITY_SENSOR_TASK = 2;   // Média prioridade (leitura de sensor)
 constexpr uint8_t PRIORITY_STEPPER_TASK = 3;  // Alta prioridade (tempo real)
 
 // Configurações de Temporização
-constexpr uint16_t BLINK_INTERVAL_MS = 1000;   // Intervalo do LED (1 segundo)
-constexpr uint16_t STEPPER_CHECK_MS = 10;      // Período de verificação do stepper
+constexpr uint16_t BLINK_INTERVAL_MS = 1000;      // Intervalo do LED (1 segundo)
+constexpr uint16_t SENSOR_READ_INTERVAL_MS = 100; // Intervalo de leitura do sensor (100ms)
+constexpr uint16_t STEPPER_CHECK_MS = 10;         // Período de verificação do stepper
 
 // Configurações do Motor de Passo
 constexpr int32_t STEPPER_DUMMY_STEPS = 400;   // Passos do movimento dummy
+constexpr int32_t STEPPER_TRAVEL_STEPS = 20000; // Curso maior para testes
+constexpr bool STEPPER_TRAVEL_UNTIL_LIMIT = true; // true: mover até acionar fim de curso
 constexpr float STEPPER_SPEED = 500.0f;        // Velocidade (passos/segundo)
 constexpr float STEPPER_ACCEL = 300.0f;        // Aceleração (passos/segundo²)
 constexpr uint16_t STEPPER_MOVE_DELAY_MS = 2000;  // Delay entre movimentos (2 segundos)
@@ -80,3 +88,9 @@ bool readLimitSwitch1();
  * @return true se o sensor está ativo (pressionado), false caso contrário
  */
 bool readLimitSwitch2();
+
+/**
+ * @brief Lê o estado do sensor óptico EE-SH3
+ * @return true se o feixe está desbloqueado, false se bloqueado
+ */
+bool readPhotoSensor();

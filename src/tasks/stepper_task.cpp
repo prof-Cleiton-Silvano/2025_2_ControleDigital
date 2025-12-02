@@ -55,8 +55,13 @@ static void stepperTask(void* params) {
   vTaskDelay(pdMS_TO_TICKS(1000));
   
   for (;;) {
+    // Define passos conforme configuração: curso grande ou até fim de curso
+    const int32_t kHuge = 1000000; // grande o suficiente para atingir o fim de curso
+    const int32_t forward = STEPPER_TRAVEL_UNTIL_LIMIT ? kHuge : STEPPER_TRAVEL_STEPS;
+    const int32_t backward = STEPPER_TRAVEL_UNTIL_LIMIT ? -kHuge : -STEPPER_TRAVEL_STEPS;
+
     // Move para frente
-    if (!executeMove(STEPPER_DUMMY_STEPS)) {
+    if (!executeMove(forward)) {
       while (checkLimitSwitches()) {
         vTaskDelay(pdMS_TO_TICKS(100));
       }
@@ -65,7 +70,7 @@ static void stepperTask(void* params) {
     vTaskDelay(pdMS_TO_TICKS(STEPPER_MOVE_DELAY_MS));
     
     // Move para trás
-    if (!executeMove(-STEPPER_DUMMY_STEPS)) {
+    if (!executeMove(backward)) {
       while (checkLimitSwitches()) {
         vTaskDelay(pdMS_TO_TICKS(100));
       }

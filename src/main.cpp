@@ -14,6 +14,7 @@
 #include <freertos/task.h>
 #include "config.h"
 #include "tasks/blink_task.h"
+#include "tasks/sensor_task.h"
 #include "tasks/stepper_task.h"
 
 /**
@@ -36,12 +37,16 @@ void setup() {
   // Cria task de diagnóstico (LED piscante) - Baixa prioridade
   startBlinkTask(PRIORITY_BLINK_TASK);
   
+  // Cria task de leitura do sensor óptico - Média prioridade
+  startSensorTask(PRIORITY_SENSOR_TASK);
+  
   // Cria task de controle do motor - Alta prioridade
   startStepperTask(PRIORITY_STEPPER_TASK);
   
   Serial.println("Sistema iniciado com sucesso!");
   Serial.println("Tasks ativas:");
   Serial.println("  - LED Blink (prioridade 1)");
+  Serial.println("  - Photo Sensor (prioridade 2)");
   Serial.println("  - Stepper Motor (prioridade 3)");
 }
 

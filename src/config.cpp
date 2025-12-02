@@ -20,6 +20,9 @@ void initHardwarePins() {
   pinMode(PIN_LIMIT_SWITCH_1, INPUT_PULLDOWN);
   pinMode(PIN_LIMIT_SWITCH_2, INPUT_PULLDOWN);
 
+  // Configura sensor óptico como entrada
+  pinMode(PIN_PHOTO_SENSOR, INPUT);
+
   // Configura pinos do driver TB6600
   pinMode(PIN_STEPPER_PULSE, OUTPUT);
   pinMode(PIN_STEPPER_DIRECTION, OUTPUT);
@@ -39,4 +42,9 @@ bool readLimitSwitch1() {
 bool readLimitSwitch2() {
   // Retorna true se o sensor está ativo (HIGH)
   return digitalRead(PIN_LIMIT_SWITCH_2) == HIGH;
+}
+
+bool readPhotoSensor() {
+  // Retorna true se o feixe está desbloqueado (HIGH)
+  return digitalRead(PIN_PHOTO_SENSOR) == HIGH;
 }
